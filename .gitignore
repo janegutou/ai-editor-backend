@@ -1,0 +1,10 @@
+venv/
+
+.env
+
+documents/*
+
+!documents/.gitkeep
+
+
+test.ipynb
