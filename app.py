@@ -30,6 +30,9 @@ if LLM_MODEL == "deepseek":
 app = Flask(__name__)
 CORS(app)
 
+
+
+
 def extract_context_data(context_text, window=1000):
 
     # 查找选中的文本并获取位置
@@ -87,6 +90,12 @@ def construct_prompt(mode, custom_prompt, context_text):
     prompt += f"\nReturn only the continuation text without any introductory or concluding sentence."
 
     return prompt
+
+
+@app.route('/ping', methods=['GET'])
+def ping():
+    return jsonify({"message": "pong"})
+
 
 @app.route('/generate', methods=['POST'])
 def generate():
