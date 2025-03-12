@@ -7,3 +7,4 @@ langchain-groq
 langchain-google-genai
 python-dotenv
 gunicorn
+python-docx
