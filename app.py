@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from langchain_openai.chat_models.base import BaseChatOpenAI
+from langchain_groq import ChatGroq
 import re
 import json
 import uuid
@@ -11,13 +12,20 @@ from docx.shared import RGBColor, Pt
 
 from dotenv import load_dotenv
 load_dotenv()
- 
 
-llm = BaseChatOpenAI(
-    model='deepseek-chat', 
-    openai_api_base='https://api.deepseek.com',
-    max_tokens=5000,
-)
+import config
+
+LLM_MODEL = config.LLM_MODEL
+
+if LLM_MODEL == "qroq":
+    llm = ChatGroq(model="llama3-8b-8192")
+
+if LLM_MODEL == "deepseek":
+    llm = BaseChatOpenAI(
+        model='deepseek-chat', 
+        openai_api_base='https://api.deepseek.com',
+        max_tokens=5000,
+    )
 
 app = Flask(__name__)
 CORS(app)
