@@ -153,7 +153,9 @@ def get_user_id_from_session():
         return None
     return user['id']
 
-document_storage = {} # temporary storage for document content
+
+
+#document_storage = {} # temporary storage for document content
 
 
 @app.route('/save_document', methods=['POST'])
@@ -166,7 +168,15 @@ def save_document():
         return jsonify({"error": "User not authenticated"}), 401
     
     user_id = user.get("id")
-    document_storage[user_id] = content
+
+    response = supabase.table("documents").insert([
+        {"user_id": user_id, "content": content}
+    ]).execute()
+    #document_storage[user_id] = content
+
+    if response.error:
+        return jsonify({"error": response.error.message}), 500
+    
     print(f"Document [{content}] saved for user {user_id}")
 
     return jsonify({"message": "Content saved successfully"})
@@ -179,8 +189,16 @@ def get_document():
         return jsonify({"error": "User not authenticated"}), 401
     
     user_id = user.get("id")
-    content = document_storage.get(user_id, "")
-    print(f"Retrieved document [{content}] for user {user_id}")
+
+    response = supabase.table("documents").select("content").eq("user_id", user_id).execute()
+
+    if response.error:
+        return jsonify({"error": response.error.message}), 500
+    
+    content = response.data[0]
+
+    #content = document_storage.get(user_id, "")
+    print(f"Retrieved document [{content[:100]}] for user {user_id}")
 
     return jsonify({"content": content})
 
@@ -192,9 +210,15 @@ def export_document():
         return jsonify({"error": "User not authenticated"}), 401
     user_id = user.get("id")
 
-    #print(document_storage)
-    content = document_storage.get(user_id, "")
-    print(f"Exporting document [{content}] for user {user_id}")
+    response = supabase.table("documents").select("content").eq("user_id", user_id).execute()
+
+    if response.error:
+        return jsonify({"error": response.error.message}), 500
+    
+    content = response.data[0]
+    #content = document_storage.get(user_id, "")
+
+    print(f"Exporting document [{content[:100]}] for user {user_id}")
 
     try:
         lexical_content = json.loads(content)
