@@ -5,10 +5,12 @@ from langchain_groq import ChatGroq
 import re
 import json
 import uuid
+import os
 from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import RGBColor, Pt
+from supabase import create_client 
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -30,7 +32,14 @@ if LLM_MODEL == "deepseek":
 app = Flask(__name__)
 CORS(app)
 
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# 设置最大生成次数和字数
+MAX_GENERATIONS_PER_MONTH = 100
+MAX_WORDS_PER_GEN = 500
+MAX_TOTAL_WORDS_PER_MONTH = 5000
 
 
 def extract_context_data(context_text, window=1000):
@@ -67,6 +76,8 @@ def construct_prompt(mode, custom_prompt, context_text):
 
     selected_text, before_text, after_text = extract_context_data(context_text)
     
+    # TODO: tuning on the prompt for language alignment (with context language, if not specifically required), and generate text should be flowing right in the middle of the context.
+
     prompt = "You are a professional writing assistant.\n"
     
     if mode == "expand":
@@ -117,6 +128,30 @@ def generate():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/ensure_user", methods=["POST"])
+def ensure_user():
+    data = request.get_json()
+    user_id = data.get("user_id")
+
+    if not user_id:
+        return jsonify({"error": "Missing user_id"}), 400
+   
+    # 查询 users 表
+    existing_user = supabase.table("users").select("*").eq("auth_id", user_id).execute()
+
+    if not existing_user.data:  # 如果 users 表里没有该用户
+        supabase.table("users").insert([
+            {"auth_id": user_id, "role": "user", "subscription_tier": "free"}
+        ]).execute()
+
+    return jsonify({"status": "ok"})
+
+# Function to get user ID from session
+def get_user_id_from_session():
+    user = supabase.auth.api.get_user()
+    if not user:
+        return None
+    return user['id']
 
 document_storage = {} # temporary storage for document content
 
@@ -125,45 +160,37 @@ document_storage = {} # temporary storage for document content
 def save_document():
     data = request.get_json()
     content = data.get("content")
-    user_id = data.get("user_id")
 
-    # 存储内容
-    if not user_id:
-        print("No user_id provided, not saving document")
-        return jsonify({"error": "Missing user_id"}), 400
+    user = get_user_id_from_session()
+    if not user:
+        return jsonify({"error": "User not authenticated"}), 401
     
+    user_id = user.get("id")
     document_storage[user_id] = content
     print(f"Document [{content}] saved for user {user_id}")
 
-    return jsonify({
-        "user_id": user_id,
-        "message": "Content saved successfully"
-    })
+    return jsonify({"message": "Content saved successfully"})
 
 
 @app.route('/get_document', methods=['GET'])
 def get_document():
-    user_id = request.args.get('user_id')    
-
-    # 生成 user_id
-    if not user_id:
-        user_id = str(uuid.uuid4())
-        print(f"No user_id provided, generating a random one {user_id}")
-
+    user = get_user_id_from_session()
+    if not user:
+        return jsonify({"error": "User not authenticated"}), 401
+    
+    user_id = user.get("id")
     content = document_storage.get(user_id, "")
     print(f"Retrieved document [{content}] for user {user_id}")
 
-    return jsonify({
-        "user_id": user_id,
-        "content": content
-    })
+    return jsonify({"content": content})
 
 
 @app.route('/export_document', methods=['GET'])
 def export_document():
-    user_id = request.args.get('userId')
-    if not user_id:
-        return jsonify({"error": "Missing userId"}), 400
+    user = get_user_id_from_session()
+    if not user:
+        return jsonify({"error": "User not authenticated"}), 401
+    user_id = user.get("id")
 
     #print(document_storage)
     content = document_storage.get(user_id, "")
@@ -181,6 +208,10 @@ def export_document():
     document.save(word_file_path)
 
     return send_file(word_file_path, as_attachment=True, download_name=f"user_{user_id}.docx")
+
+
+
+# ==== Word 文档生成器 ==== # TODO: move to a separate file
 
 def generate_word_from_lexical_content(lexical_content):
     document = Document()

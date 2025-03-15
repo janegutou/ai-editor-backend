@@ -8,3 +8,4 @@ langchain-google-genai
 python-dotenv
 gunicorn
 python-docx
+supabase
