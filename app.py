@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, jsonify, request, send_file, g
 from flask_cors import CORS
 from langchain_openai.chat_models.base import BaseChatOpenAI
 from langchain_groq import ChatGroq
@@ -11,7 +11,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import RGBColor, Pt
 from supabase import create_client 
-
+import jwt
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -34,6 +34,8 @@ CORS(app)
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
+
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # 设置最大生成次数和字数
@@ -41,23 +43,38 @@ MAX_GENERATIONS_PER_DAY = 10
 MAX_WORDS_PER_GEN = 500
 
 
-SUPABASE_ANON_KEY = 'your-anon-key'
-SUPABASE_JWT_SECRET = 'your-jwt-secret'  # This is usually the same as your anon key
-
-
-def get_user_id():
-    auth_header = request.headers.get('Authorization')
-    if not auth_header:
-        return jsonify({'error': 'Authorization header is missing'}), 401
-
-    access_token = auth_header.split(' ')[1]  # Extract the token from the header
-
-    try:
-        user = supabase.auth.get_user(access_token)  # 通过 Supabase 验证用户
-        return user.user.id if user.user else None  # 返回用户 ID
-    except Exception as e:
-        print(f"Error getting user from token: {e}")
+def get_user_from_token():
+    token = request.headers.get("Authorization")
+    if not token:
         return None
+    token = token.split(" ")[1]
+    
+    try:
+        # Decode the JWT to get the user ID
+        decoded_token = jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=['HS256'], audience='authenticated')
+        user_id = decoded_token['sub']  # The user ID is in the 'sub' claim
+        print(f"Decoded token for user {user_id}")
+        return user_id
+    
+    except jwt.ExpiredSignatureError:
+        print("Token has expired")
+        return None
+    except jwt.InvalidTokenError as e:
+        print("Invalid token error:", e)
+        return None
+    
+
+@app.before_request # register a request handler
+def before_request():
+    if request.endpoint in ['public_endpoint', 'login_endpoint', 'ping']: # skip authentication for public endpoints
+        return
+    
+    user_id = get_user_from_token()
+
+    if user_id:
+        g.user_id = user_id
+    else:
+        g.user_id = None
 
 
 def extract_context_data(context_text, window=1000):
@@ -128,10 +145,21 @@ def ping():
 
 @app.route('/generate', methods=['POST'])
 def generate():
+    # 验证用户是否登录
+    if not g.user_id:
+        return jsonify({"error": "User not authenticated"}), 401
+    user_id = g.user_id
+
     data = request.json
     user_prompt = data.get("prompt", "generate text").strip()
     generate_mode = data.get("selected_mode", "continue").strip()
     context_text = data.get("context_text").strip()
+
+    
+    # check subscription status TODO:
+    subscription_tier = supabase.table("users").select("subscription_tier").eq("auth_id", user_id).execute().data[0]["subscription_tier"]
+
+
 
     # 构建 prompt
     final_prompt = construct_prompt(generate_mode, user_prompt, context_text)
@@ -146,14 +174,14 @@ def generate():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+
 @app.route("/ensure_user", methods=["POST"])
 def ensure_user():
-    data = request.get_json()
-    user_id = data.get("user_id")
+    if not g.user_id:
+        return jsonify({"error": "User not authenticated"}), 401
+    user_id = g.user_id
 
-    if not user_id:
-        return jsonify({"error": "Missing user_id"}), 400
-   
     # 查询 users 表
     existing_user = supabase.table("users").select("*").eq("auth_id", user_id).execute()
 
@@ -173,34 +201,37 @@ def ensure_user():
 def save_document():
     data = request.get_json()
     content = data.get("content")
+    #print(f"content: {content}")
+    #print(f"content type: {type(content)}")
 
-    user_id = get_user_id()
-    if not user_id:
+    if not g.user_id:
         return jsonify({"error": "User not authenticated"}), 401
+    user_id = g.user_id
+    #print(f"Saving document for user {user_id}")
 
-    response = supabase.table("documents").insert([
+    response = supabase.table("documents").upsert([
         {"user_id": user_id, "content": content}
     ]).execute()
     #document_storage[user_id] = content
 
-    if response.error:
-        return jsonify({"error": response.error.message}), 500
+    if response.data:
+        #print(f"Document [{content}] saved for user {user_id}")
+        return jsonify({"message": "Content saved successfully"})
     
-    print(f"Document [{content}] saved for user {user_id}")
-
-    return jsonify({"message": "Content saved successfully"})
+    return jsonify({"error": response.error['message']}), 500
 
 
 @app.route('/get_document', methods=['GET'])
 def get_document():
-    user_id = get_user_id()
-    if not user_id:
+    
+    if not g.user_id:
         return jsonify({"error": "User not authenticated"}), 401
+    user_id = g.user_id
 
     response = supabase.table("documents").select("content").eq("user_id", user_id).execute()
 
-    if response.error:
-        return jsonify({"error": response.error.message}), 500
+    if not response.data:
+        return jsonify({"error": response.error['message']}), 500
     
     content = response.data[0]
 
@@ -212,14 +243,13 @@ def get_document():
 
 @app.route('/export_document', methods=['GET'])
 def export_document():
-    user_id = get_user_id()
-    if not user_id:
+    if not g.user_id:
         return jsonify({"error": "User not authenticated"}), 401
-
+    user_id = g.user_id
     response = supabase.table("documents").select("content").eq("user_id", user_id).execute()
 
-    if response.error:
-        return jsonify({"error": response.error.message}), 500
+    if not response.data:
+        return jsonify({"error": response.error['message']}), 500
     
     content = response.data[0]
     #content = document_storage.get(user_id, "")
