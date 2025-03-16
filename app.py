@@ -37,9 +37,27 @@ SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # 设置最大生成次数和字数
-MAX_GENERATIONS_PER_MONTH = 100
+MAX_GENERATIONS_PER_DAY = 10
 MAX_WORDS_PER_GEN = 500
-MAX_TOTAL_WORDS_PER_MONTH = 5000
+
+
+SUPABASE_ANON_KEY = 'your-anon-key'
+SUPABASE_JWT_SECRET = 'your-jwt-secret'  # This is usually the same as your anon key
+
+
+def get_user_id():
+    auth_header = request.headers.get('Authorization')
+    if not auth_header:
+        return jsonify({'error': 'Authorization header is missing'}), 401
+
+    access_token = auth_header.split(' ')[1]  # Extract the token from the header
+
+    try:
+        user = supabase.auth.get_user(access_token)  # 通过 Supabase 验证用户
+        return user.user.id if user.user else None  # 返回用户 ID
+    except Exception as e:
+        print(f"Error getting user from token: {e}")
+        return None
 
 
 def extract_context_data(context_text, window=1000):
@@ -146,13 +164,6 @@ def ensure_user():
 
     return jsonify({"status": "ok"})
 
-# Function to get user ID from session
-def get_user_id_from_session():
-    user = supabase.auth.api.get_user()
-    if not user:
-        return None
-    return user['id']
-
 
 
 #document_storage = {} # temporary storage for document content
@@ -163,11 +174,9 @@ def save_document():
     data = request.get_json()
     content = data.get("content")
 
-    user = get_user_id_from_session()
-    if not user:
+    user_id = get_user_id()
+    if not user_id:
         return jsonify({"error": "User not authenticated"}), 401
-    
-    user_id = user.get("id")
 
     response = supabase.table("documents").insert([
         {"user_id": user_id, "content": content}
@@ -184,11 +193,9 @@ def save_document():
 
 @app.route('/get_document', methods=['GET'])
 def get_document():
-    user = get_user_id_from_session()
-    if not user:
+    user_id = get_user_id()
+    if not user_id:
         return jsonify({"error": "User not authenticated"}), 401
-    
-    user_id = user.get("id")
 
     response = supabase.table("documents").select("content").eq("user_id", user_id).execute()
 
@@ -205,10 +212,9 @@ def get_document():
 
 @app.route('/export_document', methods=['GET'])
 def export_document():
-    user = get_user_id_from_session()
-    if not user:
+    user_id = get_user_id()
+    if not user_id:
         return jsonify({"error": "User not authenticated"}), 401
-    user_id = user.get("id")
 
     response = supabase.table("documents").select("content").eq("user_id", user_id).execute()
 
