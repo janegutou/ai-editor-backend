@@ -6,6 +6,9 @@ import re
 import json
 import uuid
 import os
+from datetime import datetime
+
+import tiktoken
 from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -29,6 +32,9 @@ if LLM_MODEL == "deepseek":
         max_tokens=5000,
     )
 
+
+encoding = tiktoken.encoding_for_model("gpt-3.5-turbo-0125") 
+
 app = Flask(__name__)
 CORS(app)
 
@@ -39,7 +45,7 @@ SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # 设置最大生成次数和字数
-MAX_GENERATIONS_PER_DAY = 10
+MAX_GENERATIONS_PER_DAY = {"free": 10, "pro": 100}
 MAX_WORDS_PER_GEN = 500
 
 
@@ -145,7 +151,6 @@ def ping():
 
 @app.route('/generate', methods=['POST'])
 def generate():
-    # 验证用户是否登录
     if not g.user_id:
         return jsonify({"error": "User not authenticated"}), 401
     user_id = g.user_id
@@ -155,24 +160,53 @@ def generate():
     generate_mode = data.get("selected_mode", "continue").strip()
     context_text = data.get("context_text").strip()
 
+    # get user info (type, subscription tier, and tokens)
+    response = supabase.table("users").select("role", "subscription_tier", "tokens").eq("auth_id", user_id).execute()
+    user_data = response.get("data", [])
+    if not user_data:
+        return jsonify({"error": "User not found"}), 404
+    user = user_data[0]
+    role = user.get("role")
+    subscription_tier = user.get("subscription_tier")
+    tokens = user.get("tokens")
+    daily_count = user.get("daily_gen_count")
+    last_gen_date = user.get("last_gen_date")
     
-    # check subscription status TODO:
-    subscription_tier = supabase.table("users").select("subscription_tier").eq("auth_id", user_id).execute().data[0]["subscription_tier"]
-
-
-
-    # 构建 prompt
+    # limit the API call based on rate limits, differs based on the subscription tier
+    today_date = datetime.today().date()
+    if last_gen_date != today_date:
+        daily_count = 0
+    elif daily_count >= MAX_GENERATIONS_PER_DAY.get(subscription_tier, 10):    
+        return jsonify({"error": "Generation limit exceeded for today"}), 402
+    
+    # prepare prompt
     final_prompt = construct_prompt(generate_mode, user_prompt, context_text)
     print("final_prompt:", final_prompt)
 
+    # limit the API call based on token limits
+    tokens_prompt = len(encoding.encode(final_prompt)) 
+    tokens_needed = tokens_prompt + MAX_WORDS_PER_GEN # a rough estimate of tokens needed to generate this round
+    if tokens_needed > tokens:
+        return jsonify({"error": "Token limit exceeded"}), 402
+    
     try:
         response = llm.invoke(final_prompt)
         print("response:", response)
         text = response.content
         #text = f"AI Response for prompt: {final_prompt}" # placeholder response
-        return jsonify({"generated_text": text})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+      
+    # update user tokens and daily count to supabase table
+    tokens_response = len(encoding.encode(text))  #  actual tokens generated in response
+    new_tokens = tokens - tokens_prompt - tokens_response
+    response = supabase.table("users").update({
+        "tokens": new_tokens, 
+        "daily_gen_count": daily_count + 1,
+        "last_gen_date": today_date
+    }).eq("auth_id", user_id).execute()
+    
+    return jsonify({"generated_text": text, "tokens": tokens})
 
 
 
@@ -186,11 +220,18 @@ def ensure_user():
     existing_user = supabase.table("users").select("*").eq("auth_id", user_id).execute()
 
     if not existing_user.data:  # 如果 users 表里没有该用户
+        tokens = 100000
+        role = "user"
+        subscription_tier = "free"  
         supabase.table("users").insert([
-            {"auth_id": user_id, "role": "user", "subscription_tier": "free"}
+            {"auth_id": user_id, "role": role, "subscription_tier": subscription_tier, "tokens": tokens}
         ]).execute()
+    else:
+        tokens = existing_user.data[0]["tokens"]
+        role = existing_user.data[0]["role"]
+        subscription_tier = existing_user.data[0]["subscription_tier"]
 
-    return jsonify({"status": "ok"})
+    return jsonify({"tokens": tokens, "role": role, "subscription_tier": subscription_tier})
 
 
 
