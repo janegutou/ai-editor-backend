@@ -1,6 +1,8 @@
 from flask import Flask, jsonify, request, send_file, g
 from flask_cors import CORS
 from langchain_openai.chat_models.base import BaseChatOpenAI
+from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 import re
 import json
@@ -20,18 +22,6 @@ load_dotenv()
 
 import config
 
-LLM_MODEL = config.LLM_MODEL
-
-if LLM_MODEL == "qroq":
-    llm = ChatGroq(model="llama3-8b-8192")
-
-if LLM_MODEL == "deepseek":
-    llm = BaseChatOpenAI(
-        model='deepseek-chat', 
-        openai_api_base='https://api.deepseek.com',
-        max_tokens=5000,
-    )
-
 
 encoding = tiktoken.encoding_for_model("gpt-3.5-turbo-0125") 
 
@@ -47,6 +37,39 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # 设置最大生成次数和字数
 MAX_GENERATIONS_PER_DAY = {"free": 10, "pro": 100}
 MAX_WORDS_PER_GEN = 500
+
+# 设置不同模型的token价格
+MODEL_PRICE = {
+    "GPT-3.5": 1,
+    "GPT-4o-mini": 0.5,
+    "LLAMA3": 0.5,
+    "GEMINI": 0.5,
+    "DEEPSEEK": 1,
+}
+
+
+
+def get_model(model_name):
+    if model_name == "GPT-3.5": 
+        llm = ChatOpenAI(model_name="gpt-3.5-turbo-0125", max_tokens=1000, temperature=0.2)
+    
+    if model_name == "GPT-4o-mini":
+        llm = ChatOpenAI(model_name="gpt-4o-mini", max_tokens=1000, temperature=0.2)
+
+    elif model_name == "GEMINI":
+        llm = ChatGoogleGenerativeAI(model="gemini-pro")
+
+    elif model_name == "LLAMA3":
+        llm = ChatGroq(model="llama3-8b-8192")
+
+    elif model_name == "DEEPSEEK": # the deepseek paid API
+        llm = BaseChatOpenAI(
+            model='deepseek-chat', 
+            openai_api_base='https://api.deepseek.com',
+            max_tokens=1000,
+            api_key=os.getenv("DEEPSEEK_API_KEY"),
+        )
+    return llm
 
 
 def get_user_from_token():
@@ -143,7 +166,6 @@ def construct_prompt(mode, custom_prompt, context_text):
 
     return prompt
 
-
 @app.route('/ping', methods=['GET'])
 def ping():
     return jsonify({"message": "pong"})
@@ -159,6 +181,8 @@ def generate():
     user_prompt = data.get("prompt", "generate text").strip()
     generate_mode = data.get("selected_mode", "continue").strip()
     context_text = data.get("context_text").strip()
+    model_name = data.get("model")
+    token_rate = MODEL_PRICE.get(model_name, 1)
 
     # get user info (type, subscription tier, and tokens)
     response = supabase.table("users").select("role", "subscription_tier", "tokens").eq("auth_id", user_id).execute()
@@ -185,10 +209,12 @@ def generate():
 
     # limit the API call based on token limits
     tokens_prompt = len(encoding.encode(final_prompt)) 
-    tokens_needed = tokens_prompt + MAX_WORDS_PER_GEN # a rough estimate of tokens needed to generate this round
+    tokens_needed = (tokens_prompt + MAX_WORDS_PER_GEN) * token_rate  # a rough estimate of tokens needed to generate this round
     if tokens_needed > tokens:
         return jsonify({"error": "Token limit exceeded"}), 402
     
+    llm = get_model(model_name)
+
     try:
         response = llm.invoke(final_prompt)
         print("response:", response)
@@ -198,15 +224,16 @@ def generate():
         return jsonify({"error": str(e)}), 500
       
     # update user tokens and daily count to supabase table
-    tokens_response = len(encoding.encode(text))  #  actual tokens generated in response
-    new_tokens = tokens - tokens_prompt - tokens_response
+    tokens_response = len(encoding.encode(text))  
+    tokens_used = (tokens_prompt + tokens_response) * token_rate # recalculate the token on actual generated in response
+    new_tokens = tokens - tokens_used
     response = supabase.table("users").update({
         "tokens": new_tokens, 
         "daily_gen_count": daily_count + 1,
         "last_gen_date": today_date
     }).eq("auth_id", user_id).execute()
     
-    return jsonify({"generated_text": text, "tokens": tokens})
+    return jsonify({"generated_text": text, "tokens": new_tokens})
 
 
 
