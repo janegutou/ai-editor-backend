@@ -156,7 +156,7 @@ def construct_prompt(mode, context_text, tone, style, audience, custom_prompt):
         prompt += "Ensure the continuation explores new ideas while maintaining consistency with the CONTEXT.\n"
         prompt += "Avoid repeating information already covered in the CONTEXT.\n"
 
-    prompt += f"\n# CONTEXT and SELECTION:\n{context_text}\n"
+    prompt += f"\n# CONTEXT and SELECTION:\n"
     
     if before_text:
         prompt += f"\n## Context Before the Selection:\n{before_text}\n"
@@ -174,9 +174,9 @@ def construct_prompt(mode, context_text, tone, style, audience, custom_prompt):
         prompt += f"(polish the SELECTION text...)\n"
     
     if after_text:
-        prompt += f"\n## Context After the Selection:\n{after_text}"
+        prompt += f"\n## Context After the Selection:\n{after_text}\n"
 
-    prompt += f"\n\nEnsure the generated text flows naturally and seamlessly into the surrounding context. Default to align with the context language."
+    prompt += f"\nEnsure the generated text flows naturally and seamlessly into the surrounding context. Default to align with the context language."
 
     if any([tone, style, audience, custom_prompt]):
         prompt += "\nPlease follow the instructions below to meet user's specific needs."
@@ -222,9 +222,10 @@ def generate():
 
     # get user info (type, subscription tier, and tokens)
     response = supabase.table("users").select("role", "subscription_tier", "tokens").eq("auth_id", user_id).execute()
-    user_data = response.get("data", [])
+    user_data = response.data
     if not user_data:
         return jsonify({"error": "User not found"}), 404
+    
     user = user_data[0]
     role = user.get("role")
     subscription_tier = user.get("subscription_tier")
@@ -255,8 +256,8 @@ def generate():
         response = llm.invoke(final_prompt)
         print("response:", response)
         text = response.content
-        #text = f"AI Response for prompt: {final_prompt}" # placeholder response
     except Exception as e:
+        print(e)
         return jsonify({"error": str(e)}), 500
       
     # update user tokens and daily count to supabase table
@@ -340,7 +341,7 @@ def get_document():
     content = response.data[0]
 
     #content = document_storage.get(user_id, "")
-    print(f"Retrieved document [{content[:100]}] for user {user_id}")
+    print(f"Retrieved document [{content}] for user {user_id}")
 
     return jsonify({"content": content})
 
@@ -358,7 +359,7 @@ def export_document():
     content = response.data[0]
     #content = document_storage.get(user_id, "")
 
-    print(f"Exporting document [{content[:100]}] for user {user_id}")
+    print(f"Exporting document [{content}] for user {user_id}")
 
     try:
         lexical_content = json.loads(content)
