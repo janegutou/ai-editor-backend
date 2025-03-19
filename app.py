@@ -57,10 +57,10 @@ def get_model(model_name):
         llm = ChatOpenAI(model_name="gpt-4o-mini", max_tokens=1000, temperature=0.2)
 
     elif model_name == "GEMINI":
-        llm = ChatGoogleGenerativeAI(model="gemini-pro")
+        llm = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.2)
 
     elif model_name == "LLAMA3":
-        llm = ChatGroq(model="llama3-8b-8192")
+        llm = ChatGroq(model="llama3-8b-8192", temperature=0.2)
 
     elif model_name == "DEEPSEEK": # the deepseek paid API
         llm = BaseChatOpenAI(
@@ -68,6 +68,7 @@ def get_model(model_name):
             openai_api_base='https://api.deepseek.com',
             max_tokens=1000,
             api_key=os.getenv("DEEPSEEK_API_KEY"),
+            temperature=0.2
         )
     return llm
 
@@ -232,9 +233,9 @@ def generate():
     tokens = user.get("tokens")
     daily_count = user.get("daily_gen_count")
     last_gen_date = user.get("last_gen_date")
-    
+    print("the current last gen date is:", last_gen_date, type(last_gen_date))
     # limit the API call based on rate limits, differs based on the subscription tier
-    today_date = datetime.today().date()
+    today_date = datetime.today().date().isoformat()
     if last_gen_date != today_date:
         daily_count = 0
     elif daily_count >= MAX_GENERATIONS_PER_DAY.get(subscription_tier, 10):    
@@ -254,7 +255,8 @@ def generate():
 
     try:
         response = llm.invoke(final_prompt)
-        print("response:", response)
+        print("response:", response)    
+        print("model usage:", response.usage_metadata.total_tokens)
         text = response.content
     except Exception as e:
         print(e)
@@ -262,7 +264,8 @@ def generate():
       
     # update user tokens and daily count to supabase table
     tokens_response = len(encoding.encode(text))  
-    tokens_used = (tokens_prompt + tokens_response) * token_rate # recalculate the token on actual generated in response
+    tokens_used = (tokens_prompt + tokens_response) * token_rate # recalculate the token on actual generated in response TODO: replace with model output tokens
+    print("estimated tokens used:", tokens_used)
     new_tokens = tokens - tokens_used
     response = supabase.table("users").update({
         "tokens": new_tokens, 
