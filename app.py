@@ -233,7 +233,7 @@ def generate():
     tokens = user.get("tokens")
     daily_count = user.get("daily_gen_count")
     last_gen_date = user.get("last_gen_date")
-    print("the current last gen date is:", last_gen_date, type(last_gen_date))
+    #print("the current last gen date is:", last_gen_date, type(last_gen_date))
     # limit the API call based on rate limits, differs based on the subscription tier
     today_date = datetime.today().date().isoformat()
     if last_gen_date != today_date:
