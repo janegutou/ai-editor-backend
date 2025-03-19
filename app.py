@@ -137,9 +137,6 @@ def extract_context_data(context_text, window=500):
     return selected_text, before_text, after_text
 
 
-
-# TODO: tuning on the prompt for language alignment (with context language, if not specifically required), and generate text should be flowing right in the middle of the context. 
-
 def construct_prompt(mode, context_text, tone, style, audience, custom_prompt):
 
     selected_text, before_text, after_text = extract_context_data(context_text)
@@ -318,7 +315,7 @@ def save_document():
 
     response = supabase.table("documents").upsert([
         {"user_id": user_id, "content": content}
-    ]).execute()
+    ], on_conflict=["user_id"]).execute()
     #document_storage[user_id] = content
 
     if response.data:
