@@ -341,10 +341,11 @@ def get_document():
     if not response.data:
         return jsonify({"error": response.error['message']}), 500
     
-    content = response.data[0]
+    content = response.data[0]['content']
+
 
     #content = document_storage.get(user_id, "")
-    print(f"Retrieved document [{content}] for user {user_id}")
+    print(f"Retrieved document {content} for user {user_id}")
 
     return jsonify({"content": content})
 
@@ -359,10 +360,9 @@ def export_document():
     if not response.data:
         return jsonify({"error": response.error['message']}), 500
     
-    content = response.data[0]
-    #content = document_storage.get(user_id, "")
+    content = response.data[0]['content']
 
-    print(f"Exporting document [{content}] for user {user_id}")
+    print(f"Exporting document {content} (type: {type(content)})  for user {user_id}")
 
     try:
         lexical_content = json.loads(content)
