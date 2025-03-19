@@ -106,7 +106,7 @@ def before_request():
         g.user_id = None
 
 
-def extract_context_data(context_text, window=1000):
+def extract_context_data(context_text, window=500):
 
     # 查找选中的文本并获取位置
     #print("context_text:", context_text)
@@ -136,32 +136,66 @@ def extract_context_data(context_text, window=1000):
     #print("after_text:", after_text)
     return selected_text, before_text, after_text
 
-def construct_prompt(mode, custom_prompt, context_text):
+
+
+# TODO: tuning on the prompt for language alignment (with context language, if not specifically required), and generate text should be flowing right in the middle of the context. 
+
+def construct_prompt(mode, context_text, tone, style, audience, custom_prompt):
 
     selected_text, before_text, after_text = extract_context_data(context_text)
     
-    # TODO: tuning on the prompt for language alignment (with context language, if not specifically required), and generate text should be flowing right in the middle of the context.
-
     prompt = "You are a professional writing assistant.\n"
     
-    if mode == "expand":
-        prompt += "Your task is to expand the selected text or selected position with rich details, clear examples, and logical elaboration.\nConsider the surrounding context for better coherence, and align with context language."
+    if mode == "polish":
+        prompt += "Your task is to improve the clarity, style, and correctness of the SELECTION.\n"
+        prompt += "Consider the surrounding CONTEXT for better coherence.\n"
+
+    elif mode == "expand":
+        prompt += "Your task is to expand the SELECTION by adding more details, depth, and elaboration.\n"
+        prompt += "Ensure the expanded content integrates smoothly into the CONTEXT.\n"
 
     elif mode == "continue":
-        prompt += "Your task is to continue writing from the selected text or selected position, to explore other related aspects of the content, ensuring diversity of thought and perspective. \nAvoid repeating the existing text or aspects already covered in the context. \nAlign with context language.\n"
+        prompt += "Your task is to continue writing naturally from the SELECTION\n"
+        prompt += "Ensure the continuation explores new ideas while maintaining consistency with the CONTEXT.\n"
+        prompt += "Avoid repeating information already covered in the CONTEXT.\n"
+
+    prompt += f"\n# CONTEXT and SELECTION:\n{context_text}\n"
     
     if before_text:
-        prompt += f"\n# Context Before the Selection:\n{before_text}\n"
-
+        prompt += f"\n## Context Before the Selection:\n{before_text}\n"
+    
     if selected_text:
-        prompt += f"\n# Selected Text:\n{selected_text}\n"
+        prompt += f"\n## SELECTION:\n{selected_text}\n"
     else:
-        prompt += f"\n# Selected Position\n"
+        prompt += f"\n## SELECTION\n"
+
+    if mode == "continue":
+        prompt += f"(continue writing here...)\n"
+    elif mode == "expand":
+        prompt += f"(expand the SELECTION text with more details...)\n"
+    elif mode == "polish":
+        prompt += f"(polish the SELECTION text...)\n"
     
     if after_text:
-        prompt += f"\n# Context After the Selection:\n{after_text}"
+        prompt += f"\n## Context After the Selection:\n{after_text}"
 
-    prompt += f"\n\nGenerate the text naturally and fluently. {custom_prompt}"
+    prompt += f"\n\nEnsure the generated text flows naturally and seamlessly into the surrounding context. Default to align with the context language."
+
+    if any([tone, style, audience, custom_prompt]):
+        prompt += "\nPlease follow the instructions below to meet user's specific needs."
+
+    if tone:
+        prompt += f"\nTone: {tone}"
+    
+    if style:
+        prompt += f"\nStyle: {style}"
+    
+    if audience:
+        prompt += f"\nTarget audience: {audience}"
+    
+    if custom_prompt:
+        prompt += f"\n{custom_prompt}"
+
     prompt += f"\nReturn only the continuation text without any introductory or concluding sentence."
 
     return prompt
@@ -178,9 +212,14 @@ def generate():
     user_id = g.user_id
 
     data = request.json
-    user_prompt = data.get("prompt", "generate text").strip()
     generate_mode = data.get("selected_mode", "continue").strip()
     context_text = data.get("context_text").strip()
+
+    tone = data.get("tone").strip()
+    style = data.get("style").strip()
+    audience = data.get("audience").strip()
+    custom_prompt = data.get("customer_prompt", "").strip()
+
     model_name = data.get("model")
     token_rate = MODEL_PRICE.get(model_name, 1)
 
@@ -204,7 +243,7 @@ def generate():
         return jsonify({"error": "Generation limit exceeded for today"}), 402
     
     # prepare prompt
-    final_prompt = construct_prompt(generate_mode, user_prompt, context_text)
+    final_prompt = construct_prompt(generate_mode, context_text, tone, style, audience, custom_prompt)
     print("final_prompt:", final_prompt)
 
     # limit the API call based on token limits
