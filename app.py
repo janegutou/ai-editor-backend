@@ -256,7 +256,7 @@ def generate():
     try:
         response = llm.invoke(final_prompt)
         print("response:", response)    
-        print("model usage:", response.usage_metadata.total_tokens)
+        print("model usage:", response.usage_metadata['total_tokens'])
         text = response.content
     except Exception as e:
         print(e)
