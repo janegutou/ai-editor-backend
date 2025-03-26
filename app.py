@@ -107,7 +107,7 @@ def before_request():
         g.user_id = None
 
 
-def extract_context_data(context_text, window=500):
+def extract_context_data(context_text, window=1200):
 
     # 查找选中的文本并获取位置
     #print("context_text:", context_text)
@@ -265,14 +265,20 @@ def generate():
     # update user tokens and daily count to supabase table
     tokens_response = len(encoding.encode(text))  
     tokens_used = (tokens_prompt + tokens_response) * token_rate # recalculate the token on actual generated in response TODO: replace with model output tokens
-    print("estimated tokens used:", tokens_used)
+    print("estimated tokens usage:", tokens_response, tokens_prompt, token_rate, tokens_used)
+
     new_tokens = tokens - tokens_used
+    
     response = supabase.table("users").update({
         "tokens": new_tokens, 
         "daily_gen_count": daily_count + 1,
         "last_gen_date": today_date
     }).eq("auth_id", user_id).execute()
     
+    # check response success or not
+    if not response.data:
+        return jsonify({"error": response.error['message']}), 502
+
     return jsonify({"generated_text": text, "tokens": new_tokens})
 
 
