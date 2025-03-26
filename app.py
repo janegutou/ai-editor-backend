@@ -267,11 +267,11 @@ def generate():
     tokens_used = (tokens_prompt + tokens_response) * token_rate # recalculate the token on actual generated in response TODO: replace with model output tokens
     print("estimated tokens usage:", tokens_response, tokens_prompt, token_rate, tokens_used)
 
-    new_tokens = tokens - tokens_used
+    new_tokens = int(tokens - tokens_used)
     
     response = supabase.table("users").update({
         "tokens": new_tokens, 
-        "daily_gen_count": daily_count + 1,
+        "daily_gen_count": int(daily_count + 1),
         "last_gen_date": today_date
     }).eq("auth_id", user_id).execute()
     
