@@ -214,16 +214,19 @@ def get_billing_info():
     else:
         transactions = response.data
 
+    # check
+    print(type(transactions[0]['created_at']), transactions[0]['created_at']) # 2025-04-05T23:06:50.435114+00:00
+
     return jsonify({
         "balance": current_tokens,
         "transactions": [
             {
-                "amount": t.amount,
-                "token_amount": t.token_amount,
-                "tx_type": t.type,
-                "status": t.status,
-                "tx_id": t.paddle_transaction_id,
-                "created_at": t.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                "amount": t.get("amount"),
+                "token_amount": t.get("token_amount"),
+                "tx_type": t.get("type"),
+                "status": t.get("status"),
+                "tx_id": t.get("paddle_transaction_id"),
+                "created_at": datetime.strptime(t.get("created_at"), "%Y-%m-%dT%H:%M:%S.%f%z").strftime("%Y-%m-%d %H:%M:%S")
             }
             for t in transactions
         ]
