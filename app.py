@@ -1,3 +1,6 @@
+from routes.paddle_webhook import paddle_bp
+
+
 from flask import Flask, jsonify, request, send_file, g
 from flask_cors import CORS
 from langchain_openai.chat_models.base import BaseChatOpenAI
@@ -15,24 +18,19 @@ from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import RGBColor, Pt
-from supabase import create_client 
-import jwt
+
 from dotenv import load_dotenv
 load_dotenv()
 
-import config
+from db import get_user_from_token, supabase
+
+app = Flask(__name__)
+CORS(app)
+app.register_blueprint(paddle_bp)
 
 
 encoding = tiktoken.encoding_for_model("gpt-3.5-turbo-0125") 
 
-app = Flask(__name__)
-CORS(app)
-
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
-
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # 设置最大生成次数和字数
 MAX_GENERATIONS_PER_DAY = {"free": 10, "pro": 100}
@@ -46,7 +44,6 @@ MODEL_PRICE = {
     "GEMINI": 0.5,
     "DEEPSEEK": 1,
 }
-
 
 
 def get_model(model_name):
@@ -71,41 +68,7 @@ def get_model(model_name):
             temperature=0.2
         )
     return llm
-
-
-def get_user_from_token():
-    token = request.headers.get("Authorization")
-    if not token:
-        return None
-    token = token.split(" ")[1]
-    
-    try:
-        # Decode the JWT to get the user ID
-        decoded_token = jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=['HS256'], audience='authenticated')
-        user_id = decoded_token['sub']  # The user ID is in the 'sub' claim
-        print(f"Decoded token for user {user_id}")
-        return user_id
-    
-    except jwt.ExpiredSignatureError:
-        print("Token has expired")
-        return None
-    except jwt.InvalidTokenError as e:
-        print("Invalid token error:", e)
-        return None
-    
-
-@app.before_request # register a request handler
-def before_request():
-    if request.endpoint in ['public_endpoint', 'login_endpoint', 'ping']: # skip authentication for public endpoints
-        return
-    
-    user_id = get_user_from_token()
-
-    if user_id:
-        g.user_id = user_id
-    else:
-        g.user_id = None
-
+   
 
 def extract_context_data(context_text, window=1200):
 
@@ -198,6 +161,20 @@ def construct_prompt(mode, context_text, tone, style, audience, custom_prompt):
 
     return prompt
 
+
+
+@app.before_request # register a request handler
+def before_request():
+    if request.endpoint in ['public_endpoint', 'login_endpoint', 'ping', 'paddle.handle_paddle_webhook']: # skip authentication for public endpoints
+        return
+    
+    user_id = get_user_from_token()
+
+    if user_id:
+        g.user_id = user_id
+    else:
+        g.user_id = None
+
 @app.route('/ping', methods=['GET'])
 def ping():
     return jsonify({"message": "pong"})
@@ -254,10 +231,15 @@ def generate():
     llm = get_model(model_name)
 
     try:
-        response = llm.invoke(final_prompt)
+        """
+        response = llm.invoke(final_prompt)        
         print("response:", response)    
         print("model usage:", response.usage_metadata['total_tokens'])
         text = response.content
+        """
+        
+        # TESTING on mockup response
+        text = """this is mockup LLM response for testing purposes.\n\nThe generated **bold text** , and *italic text*, as well as the ~~strikethrough text~~ , lastly the [link text](https://www.google.com) will be here. \nAlso have some markdown formatting for testing as well.\n\n- list item 1\n- list item 2\n- list item 3\n1. ordered list item 1\n2. ordered list item 2\n"""
     except Exception as e:
         print(e)
         return jsonify({"error": str(e)}), 500
@@ -280,8 +262,6 @@ def generate():
         return jsonify({"error": response.error['message']}), 502
 
     return jsonify({"generated_text": text, "tokens": new_tokens})
-
-
 
 @app.route("/ensure_user", methods=["POST"])
 def ensure_user():
@@ -307,10 +287,7 @@ def ensure_user():
     return jsonify({"tokens": tokens, "role": role, "subscription_tier": subscription_tier})
 
 
-
 #document_storage = {} # temporary storage for document content
-
-
 @app.route('/save_document', methods=['POST'])
 def save_document():
     data = request.get_json()
@@ -351,7 +328,7 @@ def get_document():
 
 
     #content = document_storage.get(user_id, "")
-    print(f"Retrieved document {content} for user {user_id}")
+    #print(f"Retrieved document {content} for user {user_id}")
 
     return jsonify({"content": content})
 
@@ -368,7 +345,7 @@ def export_document():
     
     content = response.data[0]['content']
 
-    print(f"Exporting document {content} (type: {type(content)})  for user {user_id}")
+    print(f"Exporting document for user {user_id}")
 
     try:
         lexical_content = json.loads(content)
