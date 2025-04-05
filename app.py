@@ -179,6 +179,56 @@ def before_request():
 def ping():
     return jsonify({"message": "pong"})
 
+@app.route("/get_tokens", methods=["GET"])
+def get_tokens():
+    if not g.user_id:
+        return jsonify({"error": "User not authenticated"}), 401
+    user_id = g.user_id
+
+    response = supabase.table("users").select("tokens").eq("auth_id", user_id).execute()
+    if not response.data:
+        return jsonify({"error": "User not found"}), 40
+    current_tokens = response.data[0]["tokens"]      
+
+    return jsonify({"tokens": current_tokens})
+
+
+@app.route("/billing", methods=["GET"])
+def get_billing_info():
+    
+    if not g.user_id:
+        return jsonify({"error": "User not authenticated"}), 401
+    user_id = g.user_id
+
+    # get current tokens from user table
+    response = supabase.table("users").select("tokens").eq("auth_id", user_id).execute()
+    if not response.data:
+        return jsonify({"error": "User not found"}), 404
+    current_tokens = response.data[0]["tokens"]  
+
+
+    # get history transactions from transactions table
+    response = supabase.table("transactions").select("*").eq("user_id", user_id).execute()
+    if not response.data:
+        transactions = []
+    else:
+        transactions = response.data
+
+    return jsonify({
+        "balance": current_tokens,
+        "transactions": [
+            {
+                "amount": t.amount,
+                "token_amount": t.token_amount,
+                "tx_type": t.type,
+                "status": t.status,
+                "tx_id": t.paddle_transaction_id,
+                "created_at": t.created_at.strftime("%Y-%m-%d %H:%M:%S")
+            }
+            for t in transactions
+        ]
+    })
+
 
 @app.route('/generate', methods=['POST'])
 def generate():

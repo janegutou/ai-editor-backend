@@ -28,9 +28,11 @@ def handle_paddle_webhook():
 
         amount = float(data.get("data").get("payments")[0]['amount'])/100  # get 支付金额 in USD
         
-        paddle_tx_id = data.get("data").get("id")  # get paddle transaction id
+        paddle_id = data.get("data").get("id")  # get paddle transaction id
 
         price_id = data.get("data").get("items")[0]["price_id"]  # get price_id
+        
+        added_tokens = int(PRICE_TOKEN_MAP[price_id] * amount)  # 充值金额 乘以 特定比例；每个 price_id 对应一个比例
 
         # 验证用户, 如存在则提取 当前 tokens 余额
         response = supabase.table("users").select("auth_id", "tokens").eq("auth_id", user_id).execute()
@@ -41,12 +43,11 @@ def handle_paddle_webhook():
 
         # 交易写入 transaction 表
         response = supabase.table("transactions").insert([
-            {"auth_id": user_id, "amount": amount, "paddle_tx_id": paddle_tx_id, "status": "completed", "type": "top-up"}
+            {"auth_id": user_id, "amount": amount, "token_amount": added_tokens, "paddle_transaction_id": paddle_id, "status": "completed", "type": "top-up"}
         ]).execute()
 
 
         # 更新 users 表 tokens 余额
-        added_tokens = int(PRICE_TOKEN_MAP[price_id] * amount)  # 充值金额 乘以 特定比例；每个 price_id 对应一个比例
         response = supabase.table("users").update({
             "tokens": int(current_tokens + added_tokens)
         }).eq("auth_id", user_id).execute()
