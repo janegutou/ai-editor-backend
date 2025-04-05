@@ -14,8 +14,8 @@ def handle_paddle_webhook():
     # 接受Paddle支付回调，处理付款成功
     # 写入 transaction 表 （supabase db)
     # 更新 users 表 （supabase db) 里的 tokens 字段 （增加）
-
-    data = request.form.to_dict()
+    print(f"Paddle webhook received request: {request.json}")
+    data = request.json
     alert = data.get("alert_name")
     print(f"Paddle webhook received data: {data}")
 
