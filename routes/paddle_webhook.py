@@ -4,7 +4,10 @@ from datetime import datetime
 import json
 
 PRICE_TOKEN_MAP = {
-    "pri_01jqwy9mp2aw1vmnq68yc9zvp0": 100}
+    "pri_01jqwy9mp2aw1vmnq68yc9zvp0": 100,  # $5 
+    "pri_01jqwy2gavsm89a15sezkaet24": 105,  # $10
+    "pri_01jqwy8yntga8hrcyw3rrv384x": 110,  # $20
+}
 
 
 paddle_bp = Blueprint("paddle", __name__)
@@ -14,16 +17,20 @@ def handle_paddle_webhook():
     # 接受Paddle支付回调，处理付款成功
     # 写入 transaction 表 （supabase db)
     # 更新 users 表 （supabase db) 里的 tokens 字段 （增加）
-    print(f"Paddle webhook received request: {request.json}")
+    
     data = request.json
-    alert = data.get("alert_name")
+    event = data.get("event_type")
     print(f"Paddle webhook received data: {data}")
 
-    if alert == "payment_succeeded":
+    if event == "transaction.paid":
 
-        user_id = data.get("passthrough")
-        amount = float(data.get("sale_gross", 0))  # 支付金额
-        paddle_tx_id = data.get("order_id")
+        user_id = data.get("data").get("custom_data")['user_id'] # get user_id from custom_data field
+
+        amount = float(data.get("data").get("payments")['amount'])/100  # get 支付金额 in USD
+        
+        paddle_tx_id = data.get("data").get("id")  # get paddle transaction id
+
+        price_id = data.get("data").get("items")[0]["price_id"]  # get price_id
 
         # 验证用户, 如存在则提取 当前 tokens 余额
         response = supabase.table("users").select("auth_id", "tokens").eq("auth_id", user_id).execute()
@@ -39,12 +46,12 @@ def handle_paddle_webhook():
 
 
         # 更新 users 表 tokens 余额
-        added_tokens = amount  # TODO: 根据不同模型定价，计算实际增加的 tokens 数量
+        added_tokens = int(PRICE_TOKEN_MAP[price_id] * amount)  # 充值金额 乘以 特定比例；每个 price_id 对应一个比例
         response = supabase.table("users").update({
             "tokens": int(current_tokens + added_tokens)
         }).eq("auth_id", user_id).execute()
 
     else:
-        print(f"Unknown Paddle webhook alert: {alert}")
+        print(f"Unknown Paddle webhook event: {event}")
 
     return jsonify({"success": True})
