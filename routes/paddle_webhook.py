@@ -26,7 +26,7 @@ def handle_paddle_webhook():
 
         user_id = data.get("data").get("custom_data")['user_id'] # get user_id from custom_data field
 
-        amount = float(data.get("data").get("payments")['amount'])/100  # get 支付金额 in USD
+        amount = float(data.get("data").get("payments")[0]['amount'])/100  # get 支付金额 in USD
         
         paddle_tx_id = data.get("data").get("id")  # get paddle transaction id
 
