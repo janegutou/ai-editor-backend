@@ -208,7 +208,7 @@ def get_billing_info():
 
 
     # get history transactions from transactions table
-    response = supabase.table("transactions").select("*").eq("user_id", user_id).execute()
+    response = supabase.table("transactions").select("*").eq("auth_id", user_id).execute()
     if not response.data:
         transactions = []
     else:
