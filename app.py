@@ -207,7 +207,7 @@ def get_billing_info():
     current_tokens = response.data[0]["tokens"]  
 
 
-    # get history transactions from transactions table
+    # get history purchases
     response = supabase.table("transactions").select("*").eq("auth_id", user_id).execute()
     if not response.data:
         transactions = []
@@ -223,8 +223,10 @@ def get_billing_info():
             {
                 "amount": t.get("amount"),
                 "token_amount": t.get("token_amount"),
-                "tx_type": t.get("type"),
-                "status": t.get("status"),
+                "tx_type": t.get("type"), # top-up, subscription, etc.
+                "price_tag": t.get("price_tag"), # the selected sub price product name, or plan name 
+                "quantity": t.get("quantity"), # how many of the price product or plan is purchased
+                "status": t.get("status"), 
                 "tx_id": t.get("paddle_transaction_id"),
                 "created_at": datetime.strptime(t.get("created_at"), "%Y-%m-%dT%H:%M:%S.%f%z").strftime("%Y-%m-%d %H:%M:%S")
             }
