@@ -12,6 +12,7 @@ import json
 import uuid
 import os
 from datetime import datetime
+from math import ceil
 
 import tiktoken
 from docx import Document
@@ -36,13 +37,41 @@ encoding = tiktoken.encoding_for_model("gpt-3.5-turbo-0125")
 MAX_GENERATIONS_PER_DAY = {"free": 10, "pro": 100}
 MAX_WORDS_PER_GEN = 500
 
+# CREDIT 单价
+CREDIT_VALUE_USD = 0.001
+
 # 设置不同模型的token价格
 MODEL_PRICE = {
-    "GPT-3.5": 1,
-    "GPT-4o-mini": 0.5,
-    "LLAMA3": 0.5,
-    "GEMINI": 0.5,
-    "DEEPSEEK": 1,
+    "GPT-3.5": { # GPT-3.5-Turbo-0125
+        "input_price_per_1m_tokens": 0.5,
+        "output_price_per_1m_tokens": 1.5,
+        "safety_margin": 0.6
+    },
+    "GPT-4o-mini": {
+        "input_price_per_1m_tokens": 0.15,
+        "output_price_per_1m_tokens": 0.6,
+        "safety_margin": 1
+    },
+    "GPT-4o": {
+        "input_price_per_1m_tokens": 5,
+        "output_price_per_1m_tokens": 15,
+        "safety_margin": 0.4
+    },
+    "GEMINI": {
+        "input_price_per_1m_tokens": 0.5,
+        "output_price_per_1m_tokens": 1.5,
+        "safety_margin": 0.6
+    },
+    "DEEPSEEK": {
+        "input_price_per_1m_tokens": 0.5,
+        "output_price_per_1m_tokens": 1.5,
+        "safety_margin": 0.5
+    },
+    "LLAMA3": {
+        "input_price_per_1m_tokens": 0.5,
+        "output_price_per_1m_tokens": 1.5,
+        "safety_margin": 0.6
+    },
 }
 
 
@@ -162,6 +191,21 @@ def construct_prompt(mode, context_text, tone, style, audience, custom_prompt):
     return prompt
 
 
+def calculate_credit_spent(model_name, input_tokens, output_tokens):
+    if model_name not in MODEL_PRICE:
+        raise ValueError(f"Model {model_name} unknown.")
+    pricing = MODEL_PRICE.get(model_name)
+
+    input_cost = input_tokens * pricing.get("input_price_per_1m_tokens") / 1000000
+    output_cost = output_tokens * pricing.get("output_price_per_1m_tokens") / 1000000
+    total_cost = input_cost + output_cost
+    total_cost_with_safety_margin = total_cost * (1 + pricing.get("safety_margin"))
+
+    credits = ceil(total_cost_with_safety_margin / CREDIT_VALUE_USD) # round up to the nearest credit
+    return credits
+
+
+
 
 @app.before_request # register a request handler
 def before_request():
@@ -214,8 +258,6 @@ def get_billing_info():
     else:
         transactions = response.data
 
-    # check
-    print(type(transactions[0]['created_at']), transactions[0]['created_at']) # 2025-04-05T23:06:50.435114+00:00
 
     return jsonify({
         "balance": current_tokens,
@@ -251,7 +293,6 @@ def generate():
     custom_prompt = data.get("customer_prompt", "").strip()
 
     model_name = data.get("model")
-    token_rate = MODEL_PRICE.get(model_name, 1)
 
     # get user info (type, subscription tier, and tokens)
     response = supabase.table("users").select("role", "subscription_tier", "tokens").eq("auth_id", user_id).execute()
@@ -260,12 +301,13 @@ def generate():
         return jsonify({"error": "User not found"}), 404
     
     user = user_data[0]
-    role = user.get("role")
+    #role = user.get("role")
     subscription_tier = user.get("subscription_tier")
-    tokens = user.get("tokens")
+    credits = user.get("tokens") # 代币数量
     daily_count = user.get("daily_gen_count")
     last_gen_date = user.get("last_gen_date")
     #print("the current last gen date is:", last_gen_date, type(last_gen_date))
+    
     # limit the API call based on rate limits, differs based on the subscription tier
     today_date = datetime.today().date().isoformat()
     if last_gen_date != today_date:
@@ -278,45 +320,45 @@ def generate():
     print("final_prompt:", final_prompt)
 
     # limit the API call based on token limits
-    tokens_prompt = len(encoding.encode(final_prompt)) 
-    tokens_needed = (tokens_prompt + MAX_WORDS_PER_GEN) * token_rate  # a rough estimate of tokens needed to generate this round
-    if tokens_needed > tokens:
+    tokens_prompt = len(encoding.encode(final_prompt))  # a rough estimate of input tokens
+    credits_needed = calculate_credit_spent(model_name, input_tokens=tokens_prompt, output_tokens=MAX_WORDS_PER_GEN) # a roungh estimate of credits needed
+    if credits_needed > credits:
         return jsonify({"error": "Token limit exceeded"}), 402
     
     llm = get_model(model_name)
 
     try:
-        """
         response = llm.invoke(final_prompt)        
-        print("response:", response)    
-        print("model usage:", response.usage_metadata['total_tokens'])
+        print("response:", response)
         text = response.content
-        """
         
+        input_tokens = response.usage_metadata['input_tokens']
+        output_tokens = response.usage_metadata['output_tokens']
+
         # TESTING on mockup response
-        text = """this is mockup LLM response for testing purposes.\n\nThe generated **bold text** , and *italic text*, as well as the ~~strikethrough text~~ , lastly the [link text](https://www.google.com) will be here. \nAlso have some markdown formatting for testing as well.\n\n- list item 1\n- list item 2\n- list item 3\n1. ordered list item 1\n2. ordered list item 2\n"""
+        #text = """this is mockup LLM response for testing purposes.\n\nThe generated **bold text** , and *italic text*, as well as the ~~strikethrough text~~ , lastly the [link text](https://www.google.com) will be here. \nAlso have some markdown formatting for testing as well.\n\n- list item 1\n- list item 2\n- list item 3\n1. ordered list item 1\n2. ordered list item 2\n"""
     except Exception as e:
         print(e)
         return jsonify({"error": str(e)}), 500
       
     # update user tokens and daily count to supabase table
-    tokens_response = len(encoding.encode(text))  
-    tokens_used = (tokens_prompt + tokens_response) * token_rate # recalculate the token on actual generated in response TODO: replace with model output tokens
-    print("estimated tokens usage:", tokens_response, tokens_prompt, token_rate, tokens_used)
+    credits_spent = calculate_credit_spent(model_name, input_tokens, output_tokens)
 
-    new_tokens = int(tokens - tokens_used)
+    new_credits = int(credits - credits_spent)
     
     response = supabase.table("users").update({
-        "tokens": new_tokens, 
+        "tokens": new_credits, 
         "daily_gen_count": int(daily_count + 1),
         "last_gen_date": today_date
     }).eq("auth_id", user_id).execute()
     
+    # TODO: update usage_daily 表  // 每日局和写入
+
     # check response success or not
     if not response.data:
         return jsonify({"error": response.error['message']}), 502
 
-    return jsonify({"generated_text": text, "tokens": new_tokens})
+    return jsonify({"generated_text": text, "tokens": new_credits})
 
 @app.route("/ensure_user", methods=["POST"])
 def ensure_user():
