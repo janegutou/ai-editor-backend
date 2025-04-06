@@ -370,7 +370,7 @@ def ensure_user():
     existing_user = supabase.table("users").select("*").eq("auth_id", user_id).execute()
 
     if not existing_user.data:  # 如果 users 表里没有该用户
-        tokens = 100000
+        tokens = 1000 # 新用户默认获赠代币
         role = "user"
         subscription_tier = "free"  
         supabase.table("users").insert([
