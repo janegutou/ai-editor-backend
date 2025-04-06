@@ -3,12 +3,11 @@ from db import supabase
 from datetime import datetime
 import json
 
-PRICE_TOKEN_MAP = {
-    "pri_01jqwy9mp2aw1vmnq68yc9zvp0": 100,  # $5 
-    "pri_01jqwy2gavsm89a15sezkaet24": 105,  # $10
-    "pri_01jqwy8yntga8hrcyw3rrv384x": 110,  # $20
+PRICE_CREDIT_MAP = {  # 价格ID 对应 credit 单价的 映射
+    "pri_01jqwy9mp2aw1vmnq68yc9zvp0": 1000,  # 单次购买$5时，credit 单价为 1/1000，即 一美元能买1000积分
+    "pri_01jqwy2gavsm89a15sezkaet24": 1050,  # 单次购买$10时，credit 单价为 1/1050（打折扣了，价格稍低），即 一美元能买1050积分
+    "pri_01jqwy8yntga8hrcyw3rrv384x": 1100,  # 单次购买$20时，credit 单价为 1/1100（进一步打折），即 一美元能买1100积分
 }
-
 
 paddle_bp = Blueprint("paddle", __name__)
 
@@ -34,7 +33,7 @@ def handle_paddle_webhook():
         price_tag = data.get("data").get("items")[0]["price"]["name"]  # get price_name
         quantity = data.get("data").get("items")[0]["quantity"]  # get purchased quantity
 
-        added_tokens = int(PRICE_TOKEN_MAP[price_id] * amount)  # 充值金额 乘以 特定比例；每个 price_id 对应一个比例
+        added_tokens = int(PRICE_CREDIT_MAP[price_id] * amount)  # 充值金额 乘以 特定比例；每个 price_id 对应一个比例
 
         # 验证用户, 如存在则提取 当前 tokens 余额
         response = supabase.table("users").select("auth_id", "tokens").eq("auth_id", user_id).execute()
