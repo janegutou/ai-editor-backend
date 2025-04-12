@@ -199,9 +199,9 @@ def calculate_credit_spent(model_name, input_tokens, output_tokens):
     input_cost = input_tokens * pricing.get("input_price_per_1m_tokens") / 1000000
     output_cost = output_tokens * pricing.get("output_price_per_1m_tokens") / 1000000
     total_cost = input_cost + output_cost
-    total_cost_with_safety_margin = total_cost * (1 + pricing.get("safety_margin"))
+    total_cost_with_safety_margin = total_cost * (1 + pricing.get("safety_margin")) # add a safety margin for profit
 
-    credits = ceil(total_cost_with_safety_margin / CREDIT_VALUE_USD) # round up to the nearest credit
+    credits = ceil(total_cost_with_safety_margin / CREDIT_VALUE_USD * 10) / 10 # round up to 1 decimal place
     return credits
 
 
@@ -344,10 +344,10 @@ def generate():
     # update user tokens and daily count to supabase table
     credits_spent = calculate_credit_spent(model_name, input_tokens, output_tokens)
 
-    new_credits = int(credits - credits_spent)
+    new_credits = credits - credits_spent # float
     
     response = supabase.table("users").update({
-        "tokens": new_credits, 
+        "tokens": new_credits,   # update in db float type
         "daily_gen_count": int(daily_count + 1),
         "last_gen_date": today_date
     }).eq("auth_id", user_id).execute()
@@ -358,7 +358,7 @@ def generate():
     if not response.data:
         return jsonify({"error": response.error['message']}), 502
 
-    return jsonify({"generated_text": text, "tokens": new_credits})
+    return jsonify({"generated_text": text, "tokens": int(new_credits)}) # returned credits in integer type
 
 @app.route("/ensure_user", methods=["POST"])
 def ensure_user():
