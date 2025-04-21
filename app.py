@@ -253,7 +253,7 @@ def feedback():
             "email": email,
         }).execute()
 
-        if response.error:
+        if not response.data:
             return jsonify({"error": "Failed to insert feedback"}), 500
 
     return jsonify({"message": "success"})
