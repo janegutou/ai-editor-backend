@@ -236,6 +236,27 @@ def get_tokens():
 
     return jsonify({"tokens": current_tokens})
 
+@app.route("/feedback", methods=["POST"])
+def feedback():
+    if not g.user_id:
+        return jsonify({"error": "User not authenticated"}), 401
+    user_id = g.user_id
+
+    data = request.json
+    message = data.get("message").strip()
+    email = data.get("email").strip()
+
+    if message: # insert feedback to database
+        response = supabase.table("feedback").insert({
+            "auth_id": user_id,
+            "message": message,
+            "email": email,
+        }).execute()
+
+        if response.error:
+            return jsonify({"error": "Failed to insert feedback"}), 500
+
+    return jsonify({"message": "success"})
 
 @app.route("/billing", methods=["GET"])
 def get_billing_info():
