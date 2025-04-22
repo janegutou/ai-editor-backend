@@ -35,13 +35,13 @@ encoding = tiktoken.encoding_for_model("gpt-3.5-turbo-0125")
 
 
 # 设置最大生成次数和字数
-MAX_GENERATIONS_PER_DAY = {"free": 10, "pro": 100}
+MAX_GENERATIONS_PER_DAY = {"free": 20, "pro": 100}
 MAX_WORDS_PER_GEN = 500
 
-# CREDIT 单价
+# CREDIT 单价，主观设置而来，大致标准是每次生成为1credit左右的转换效果即可
 CREDIT_VALUE_USD = 0.001
 
-# 设置不同模型的token价格
+# 设置不同模型的token价格，基本参考沿用上游模型的实际售价
 MODEL_PRICE = {
     "GPT-3.5": { # GPT-3.5-Turbo-0125
         "input_price_per_1m_tokens": 0.5,
@@ -74,9 +74,14 @@ MODEL_PRICE = {
         "safety_margin": 0.6
     },
     "GROK3": {
+        "input_price_per_1m_tokens": 3,
+        "output_price_per_1m_tokens": 15,
+        "safety_margin": 0.4
+    },
+    "GROK3-mini": {
         "input_price_per_1m_tokens": 0.3,
-        "output_price_per_1m_tokens": 1,
-        "safety_margin": 0.6
+        "output_price_per_1m_tokens": 0.5,
+        "safety_margin": 1
     }
 }
 
@@ -84,6 +89,9 @@ MODEL_PRICE = {
 def get_model(model_name):
     if model_name == "GROK3": 
         llm = ChatOpenAI(model_name="grok-3-latest", max_tokens=1000, temperature=0.2)
+
+    if model_name == "GROK3-mini": 
+        llm = ChatOpenAI(model_name="grok-3-mini", max_tokens=1000, temperature=0.2)
     
     if model_name == "GPT-4o-mini":
         llm = ChatOpenAI(model_name="gpt-4o-mini", max_tokens=1000, temperature=0.2)
