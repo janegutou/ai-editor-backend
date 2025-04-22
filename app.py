@@ -115,8 +115,9 @@ def get_model(model_name):
 
 def extract_context_data(context_text, window=1200):
 
-    # 查找选中的文本并获取位置
     #print("context_text:", context_text)
+
+    # 查找选中的文本并获取位置
     selected_match = re.search(r"\[\[SELECTED\]\](.*?)\[\[/SELECTED\]\]", context_text, re.DOTALL)
     #print("selected_match:", selected_match)
     cursor_match = re.search(r"\[\[CURSOR\]\]", context_text)
@@ -139,6 +140,11 @@ def extract_context_data(context_text, window=1200):
 
     before_text = context_text[:selected_start][-window:] if selected_start else ""
     after_text = context_text[selected_end:][:window] if selected_end else ""
+
+    # 进一步的，判断text是否有截断标记，如果有，进一步截断（截断标记为：持续的>=10个的等号==================)
+    before_text = re.split(r"={10,}", before_text)[-1]
+    after_text = re.split(r"={10,}", after_text)[0]
+
     #print("before_text:", before_text)
     #print("after_text:", after_text)
     return selected_text, before_text, after_text
