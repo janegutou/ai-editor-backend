@@ -5,6 +5,7 @@ from flask import Flask, jsonify, request, send_file, g
 from flask_cors import CORS
 from langchain_openai.chat_models.base import BaseChatOpenAI
 from langchain_openai import ChatOpenAI
+from langchain_xai import ChatXAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 import re
@@ -72,12 +73,17 @@ MODEL_PRICE = {
         "output_price_per_1m_tokens": 1.5,
         "safety_margin": 0.6
     },
+    "GROK3": {
+        "input_price_per_1m_tokens": 0.5,
+        "output_price_per_1m_tokens": 1.5,
+        "safety_margin": 0.6
+    }
 }
 
 
 def get_model(model_name):
-    if model_name == "GPT-3.5": 
-        llm = ChatOpenAI(model_name="gpt-3.5-turbo-0125", max_tokens=1000, temperature=0.2)
+    if model_name == "GROK3": 
+        llm = ChatOpenAI(model_name="grok-3-latest", max_tokens=1000, temperature=0.2)
     
     if model_name == "GPT-4o-mini":
         llm = ChatOpenAI(model_name="gpt-4o-mini", max_tokens=1000, temperature=0.2)
