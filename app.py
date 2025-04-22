@@ -74,8 +74,8 @@ MODEL_PRICE = {
         "safety_margin": 0.6
     },
     "GROK3": {
-        "input_price_per_1m_tokens": 0.5,
-        "output_price_per_1m_tokens": 1.5,
+        "input_price_per_1m_tokens": 0.3,
+        "output_price_per_1m_tokens": 1,
         "safety_margin": 0.6
     }
 }
