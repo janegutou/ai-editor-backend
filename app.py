@@ -88,10 +88,10 @@ MODEL_PRICE = {
 
 def get_model(model_name):
     if model_name == "GROK3": 
-        llm = ChatOpenAI(model_name="grok-3-latest", max_tokens=1000, temperature=0.2)
+        llm = ChatXAI(model_name="grok-3-latest", max_tokens=1000, temperature=0.2)
 
     if model_name == "GROK3-mini": 
-        llm = ChatOpenAI(model_name="grok-3-mini", max_tokens=1000, temperature=0.2)
+        llm = ChatXAI(model_name="grok-3-mini", max_tokens=1000, temperature=0.2)
     
     if model_name == "GPT-4o-mini":
         llm = ChatOpenAI(model_name="gpt-4o-mini", max_tokens=1000, temperature=0.2)
