@@ -369,16 +369,16 @@ def generate():
     llm = get_model(model_name)
 
     try:
-        #response = llm.invoke(final_prompt)        
-        #print("response:", response)
-        #text = response.content
-        #input_tokens = response.usage_metadata['input_tokens']
-        #output_tokens = response.usage_metadata['output_tokens']
+        response = llm.invoke(final_prompt)        
+        print("response:", response)
+        text = response.content
+        input_tokens = response.usage_metadata['input_tokens']
+        output_tokens = response.usage_metadata['output_tokens']
 
         # TESTING on mockup response
-        input_tokens = 500
-        output_tokens = 500
-        text = """Non-native English speakers who seek polished, natural-sounding language for professional or creative purposes. Individual content creators, such as bloggers, social media influencers, and freelance writers, who require assistance with grammar, tone, and stylistic refinement to enhance readability and engagement. Enterprise staff, including marketing teams, customer support representatives, and corporate communicators, who handle high-volume writing tasks—such as drafting emails, reports, presentations, and internal documentation—and need efficiency without sacrificing clarity or professionalism. Additionally, academic researchers and students benefit from precise language adjustments to ensure their work meets formal standards. The tool also supports non-technical professionals transitioning into roles requiring polished written communication, such as HR personnel or project managers coordinating cross-functional teams."""
+        #input_tokens = 500
+        #output_tokens = 500
+        #text = """Non-native English speakers who seek polished, natural-sounding language for professional or creative purposes. Individual content creators, such as bloggers, social media influencers, and freelance writers, who require assistance with grammar, tone, and stylistic refinement to enhance readability and engagement. Enterprise staff, including marketing teams, customer support representatives, and corporate communicators, who handle high-volume writing tasks—such as drafting emails, reports, presentations, and internal documentation—and need efficiency without sacrificing clarity or professionalism. Additionally, academic researchers and students benefit from precise language adjustments to ensure their work meets formal standards. The tool also supports non-technical professionals transitioning into roles requiring polished written communication, such as HR personnel or project managers coordinating cross-functional teams."""
         #text = """this is mockup LLM response for testing purposes.\n\nThe generated **bold text** , and *italic text*, as well as the ~~strikethrough text~~ , lastly the [link text](https://www.google.com) will be here. \nAlso have some markdown formatting for testing as well.\n\n- list item 1\n- list item 2\n- list item 3\n1. ordered list item 1\n2. ordered list item 2\n"""
     except Exception as e:
         print(e)
