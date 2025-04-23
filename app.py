@@ -115,7 +115,7 @@ def get_model(model_name):
 
 def extract_context_data(context_text, window=1200):
 
-    #print("context_text:", context_text)
+    #print("raw context:", context_text)
 
     # 查找选中的文本并获取位置
     selected_match = re.search(r"\[\[SELECTED\]\](.*?)\[\[/SELECTED\]\]", context_text, re.DOTALL)
@@ -142,8 +142,8 @@ def extract_context_data(context_text, window=1200):
     after_text = context_text[selected_end:][:window] if selected_end else ""
 
     # 进一步的，判断text是否有截断标记，如果有，进一步截断（截断标记为：持续的>=10个的等号==================)
-    before_text = re.split(r"={10,}", before_text)[-1]
-    after_text = re.split(r"={10,}", after_text)[0]
+    before_text = re.split(r"={10,}", before_text)[-1].strip()
+    after_text = re.split(r"={10,}", after_text)[0].strip()
 
     #print("before_text:", before_text)
     #print("after_text:", after_text)
@@ -172,10 +172,10 @@ def construct_prompt(mode, context_text, tone, style, audience, custom_prompt):
     prompt += f"\n# CONTEXT and SELECTION:\n"
     
     if before_text:
-        prompt += f"\n## Context Before the Selection:\n{before_text}\n"
+        prompt += f"\n## Context Before the Selection:\n```\n{before_text}\n```\n"
     
     if selected_text:
-        prompt += f"\n## SELECTION:\n{selected_text}\n"
+        prompt += f"\n## SELECTION:\n```\n{selected_text}\n```\n"
     else:
         prompt += f"\n## SELECTION\n"
 
@@ -187,7 +187,7 @@ def construct_prompt(mode, context_text, tone, style, audience, custom_prompt):
         prompt += f"(polish the SELECTION text...)\n"
     
     if after_text:
-        prompt += f"\n## Context After the Selection:\n{after_text}\n"
+        prompt += f"\n## Context After the Selection:\n```\n{after_text}\n```\n"
 
     prompt += f"\nEnsure the generated text flows naturally and seamlessly into the surrounding context. Default to align with the context language."
 
@@ -358,7 +358,7 @@ def generate():
     
     # prepare prompt
     final_prompt = construct_prompt(generate_mode, context_text, tone, style, audience, custom_prompt)
-    print("final_prompt:", final_prompt)
+    #print("final_prompt:", final_prompt)
 
     # limit the API call based on token limits
     tokens_prompt = len(encoding.encode(final_prompt))  # a rough estimate of input tokens
@@ -369,14 +369,16 @@ def generate():
     llm = get_model(model_name)
 
     try:
-        response = llm.invoke(final_prompt)        
-        print("response:", response)
-        text = response.content
-        
-        input_tokens = response.usage_metadata['input_tokens']
-        output_tokens = response.usage_metadata['output_tokens']
+        #response = llm.invoke(final_prompt)        
+        #print("response:", response)
+        #text = response.content
+        #input_tokens = response.usage_metadata['input_tokens']
+        #output_tokens = response.usage_metadata['output_tokens']
 
         # TESTING on mockup response
+        input_tokens = 500
+        output_tokens = 500
+        text = """Non-native English speakers who seek polished, natural-sounding language for professional or creative purposes. Individual content creators, such as bloggers, social media influencers, and freelance writers, who require assistance with grammar, tone, and stylistic refinement to enhance readability and engagement. Enterprise staff, including marketing teams, customer support representatives, and corporate communicators, who handle high-volume writing tasks—such as drafting emails, reports, presentations, and internal documentation—and need efficiency without sacrificing clarity or professionalism. Additionally, academic researchers and students benefit from precise language adjustments to ensure their work meets formal standards. The tool also supports non-technical professionals transitioning into roles requiring polished written communication, such as HR personnel or project managers coordinating cross-functional teams."""
         #text = """this is mockup LLM response for testing purposes.\n\nThe generated **bold text** , and *italic text*, as well as the ~~strikethrough text~~ , lastly the [link text](https://www.google.com) will be here. \nAlso have some markdown formatting for testing as well.\n\n- list item 1\n- list item 2\n- list item 3\n1. ordered list item 1\n2. ordered list item 2\n"""
     except Exception as e:
         print(e)
@@ -384,7 +386,7 @@ def generate():
       
     # update user tokens and daily count to supabase table
     credits_spent = calculate_credit_spent(model_name, input_tokens, output_tokens)
-
+    print("credits_spent:", credits_spent)
     new_credits = credits - credits_spent # float
     
     response = supabase.table("users").update({
