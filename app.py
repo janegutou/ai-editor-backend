@@ -93,13 +93,13 @@ def get_model(model_name):
     if model_name == "GROK3-mini": 
         llm = ChatXAI(model_name="grok-3-mini", max_tokens=1000, temperature=0.2)
     
-    if model_name == "GPT-4o-mini":
+    if model_name == "GPT-4o-mini": # openai paid API
         llm = ChatOpenAI(model_name="gpt-4o-mini", max_tokens=1000, temperature=0.2)
 
-    elif model_name == "GEMINI":
-        llm = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.2)
+    elif model_name == "GEMINI": # free with limited tokens
+        llm = ChatGoogleGenerativeAI(model="gemini-1.5-pro-latest", temperature=0.2)
 
-    elif model_name == "LLAMA3":
+    elif model_name == "LLAMA3": # free with limited tokens
         llm = ChatGroq(model="llama3-8b-8192", temperature=0.2)
 
     elif model_name == "DEEPSEEK": # the deepseek paid API
