@@ -97,7 +97,7 @@ def get_model(model_name):
         llm = ChatOpenAI(model_name="gpt-4o-mini", max_tokens=1000, temperature=0.2)
 
     elif model_name == "GEMINI": # free with limited tokens
-        llm = ChatGoogleGenerativeAI(model="gemini-1.5-pro-latest", temperature=0.2)
+        llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.2)
 
     elif model_name == "LLAMA3": # free with limited tokens
         llm = ChatGroq(model="llama3-8b-8192", temperature=0.2)
